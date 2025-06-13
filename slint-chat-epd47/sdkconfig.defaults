@@ -1,0 +1,19 @@
+# Minimal ESP32-S3 Configuration for Slint UI Demo
+
+# Enable PSRAM (required for Slint framebuffers)
+CONFIG_ESP32S3_SPIRAM_SUPPORT=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_USE_MALLOC=y
+
+# Memory configuration for Slint
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+
+# Logging
+CONFIG_LOG_DEFAULT_LEVEL_INFO=y
+
+# Partition table
+CONFIG_PARTITION_TABLE_SINGLE_APP_LARGE=y
+
+# Optimization
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
