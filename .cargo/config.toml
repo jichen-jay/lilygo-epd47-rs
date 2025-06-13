@@ -1,0 +1,28 @@
+[build]
+target = "xtensa-esp32s3-espidf"
+
+[target.xtensa-esp32s3-espidf]
+linker = "ldproxy"
+# Add linker arguments to help ldproxy find the correct linker
+rustflags = [
+    # Force ldproxy to use the ESP32-S3 linker
+    "-C",
+    "link-arg=--ldproxy-linker=xtensa-esp32s3-elf-gcc",
+]
+
+[unstable]
+build-std = ["std", "panic_abort"]
+
+[env]
+# ESP-IDF environment variables - make sure ESP-IDF is installed
+ESP_IDF_VERSION = "v5.1.2"
+ESP_IDF_TOOLS_INSTALL_DIR = "global"
+
+# Path to ESP-IDF installation (adjust this to your actual ESP-IDF path)
+IDF_PATH = "$HOME/esp/esp-idf"
+
+# Enable clang for ESP32-S3 - updated path
+LIBCLANG_PATH = "$HOME/.espressif/tools/xtensa-esp-elf-clang/esp-16.0.1-20230516/lib/"
+
+# ESP32-S3 specific configuration
+ESP_IDF_SDKCONFIG_DEFAULTS = "sdkconfig.defaults.esp32s3"
