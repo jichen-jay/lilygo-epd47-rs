@@ -11,11 +11,10 @@ rust-version = "1.80"
 [profile.release]
 opt-level = "s"
 panic = "abort"
-# Disable backtrace to avoid unwinding issues
 debug = false
 
 [profile.dev]
-debug = true    # Symbols are nice and they don't increase the size on Flash
+debug = true
 opt-level = "z"
 panic = "abort"
 
@@ -28,12 +27,14 @@ alloc = ["esp-idf-svc/alloc"]
 anyhow = "1"
 log = { version = "0.4", default-features = false }
 
-# ESP-IDF - Fixed configuration
+# ESP-IDF framework
 esp-idf-sys = { version = "0.36.1", features = ["binstart", "native"] }
 esp-idf-svc = { version = "0.51", default-features = false, features = [
     "std",
     "binstart",
     "native",
+    "experimental",        # May be needed for some LCD/DMA features
+    "embassy-time-driver",
 ] }
 embedded-svc = { version = "0.28", default-features = false }
 embedded-hal = { version = "1.0" }
@@ -47,10 +48,10 @@ slint = { version = "1.10", default-features = false, features = [
     "compat-1-2",
     "unsafe-single-threaded",
     "libm",
-    "renderer-software",
+    "renderer-software",      # Software renderer works with our custom EPD47 driver
 ] }
 
-# Math support
+# Math and utility support
 portable-atomic = { version = "1", features = ["float"] }
 num-traits = { version = "0.2.16", default-features = false, features = [
     "libm",

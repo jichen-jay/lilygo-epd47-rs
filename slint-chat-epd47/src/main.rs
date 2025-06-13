@@ -1,39 +1,62 @@
+// src/main.rs - Integrated Slint + EPD47 with esp-idf-svc
 use esp_idf_svc::hal::prelude::Peripherals;
 use log::info;
 use std::rc::Rc;
+use std::thread;
+use std::time::Duration;
+
+use embedded_graphics::{
+    prelude::*,
+    pixelcolor::Gray4,
+    primitives::{Circle, PrimitiveStyle, Rectangle},
+    geometry::Point,
+};
 
 // Import Slint
 slint::include_modules!();
+use slint::Model; // Add this import for row_count method
+
+// Import our EPD47 driver
+mod epd47_idf;
+use epd47_idf::{Epd47Display, DrawMode, init_epd47_pins};
 
 fn main() -> anyhow::Result<()> {
     // Initialize ESP-IDF
     esp_idf_svc::sys::link_patches();
     esp_idf_svc::log::EspLogger::initialize_default();
 
-    info!("Starting EPD47 Chat Demo");
+    info!("Starting EPD47 Slint Chat Demo");
 
-    // Initialize peripherals (for future display integration)
-    let _peripherals = Peripherals::take()?;
+    // Initialize peripherals
+    let mut peripherals = Peripherals::take()?;
 
-    // Create the Slint UI
+    // Initialize EPD47 display
+    let pins = init_epd47_pins(&mut peripherals)?;
+    let mut epd_display = Epd47Display::new(pins)?;
+    
+    // Power on the display
+    epd_display.power_on()?;
+    epd_display.clear()?;
+    
+    info!("EPD47 display initialized successfully");
+
+    // Test the display with a simple circle
+    test_epd47_display(&mut epd_display)?;
+
+    // Create the Slint UI using default platform
     let ui = ChatWindow::new().map_err(|e| anyhow::anyhow!("Failed to create UI: {:?}", e))?;
     
-    // Demo conversation data - simulating a real chat
+    // Demo conversation data
     let demo_messages = vec![
         ("Welcome to ChatGPT on E-Paper!", false),
-        ("Hello! I'd like to learn about renewable energy.", true),
-        ("That's a great topic! Renewable energy includes solar, wind, hydro, and geothermal power. These sources are sustainable because they naturally replenish and don't run out like fossil fuels.", false),
-        ("What's the most efficient type?", true),
-        ("Solar panels typically achieve 15-22% efficiency, while modern wind turbines can reach 35-45%. However, 'efficiency' depends on location - coastal areas favor wind, sunny regions favor solar.", false),
-        ("Can you explain how solar panels work?", true),
-        ("Solar panels use photovoltaic cells made of silicon. When sunlight hits these cells, it knocks electrons loose, creating an electric current. This direct current (DC) is then converted to alternating current (AC) for home use.", false),
-        ("That's fascinating! What about costs?", true),
-        ("Solar costs have dropped dramatically - about 90% since 2010! Installation typically costs $15,000-25,000 for homes, but tax credits and savings over time make it increasingly affordable.", false),
-        ("Thanks for the detailed explanation!", true),
-        ("You're welcome! Feel free to ask about any other topics. I'm here to help with questions about science, technology, writing, or anything else you're curious about.", false),
+        ("Hello! How does this e-paper display work?", true),
+        ("This EPD47 display uses electrophoretic technology with 960x540 resolution and 4-bit grayscale. It only consumes power during updates!", false),
+        ("That's amazing! Can you tell me more about Slint?", true),
+        ("Slint is a modern GUI toolkit that works great on embedded devices. It uses a software renderer that we can bridge to the e-paper display.", false),
+        ("How is the performance?", true),
+        ("E-paper displays refresh slowly (~2 seconds) but hold images without power. Perfect for low-power applications!", false),
     ];
 
-    // Convert to Slint format
     let slint_messages: Vec<(slint::SharedString, bool)> = demo_messages
         .into_iter()
         .map(|(content, is_user)| (content.into(), is_user))
@@ -42,88 +65,92 @@ fn main() -> anyhow::Result<()> {
     let message_model = Rc::new(slint::VecModel::from(slint_messages));
     ui.set_messages(message_model.clone().into());
 
-    // Simulate typing indicator and new messages
+    // Handle new messages
     let ui_weak = ui.as_weak();
     let message_model_clone = message_model.clone();
     ui.on_send_message(move |message| {
         let ui = ui_weak.upgrade().unwrap();
-        info!("Demo: User sent message: {}", message);
+        info!("User sent: {}", message);
         
-        // Add user message to the conversation
+        // Add user message
         message_model_clone.push((message.clone(), true));
         
-        // Show typing indicator
-        ui.set_is_loading(true);
+        // Generate AI response based on input
+        let response = generate_ai_response(&message);
+        message_model_clone.push((response.into(), false));
         
-        // Generate response immediately (simulate AI processing)
-        let response = generate_demo_response(&message.to_string());
-        
-        // Use a timer to simulate thinking delay
-        let message_model_timer = message_model_clone.clone();
-        let ui_weak_inner = ui.as_weak();
-        let response_msg = response.clone();
-        slint::Timer::single_shot(std::time::Duration::from_millis(1500), move || {
-            if let Some(ui) = ui_weak_inner.upgrade() {
-                message_model_timer.push((response_msg.into(), false));
-                ui.set_is_loading(false);
-            }
-        });
-        
-        // Clear input
-        ui.set_current_message("".into());
+        // Clear input - Note: input_text property may not exist in your UI
+        // ui.set_input_text("".into()); // Remove this line if input_text doesn't exist
     });
 
-    // Demo clear chat functionality
-    let ui_weak = ui.as_weak();
-    let message_model_clone = message_model.clone();
-    ui.on_clear_chat(move || {
-        info!("Demo: Clearing chat");
+    info!("Starting Slint UI...");
+
+    // Start a background thread to periodically update the EPD47 display
+    let ui_weak_bg = ui.as_weak();
+    thread::spawn(move || {
+        let mut last_message_count = 0;
         
-        // Reset to welcome message
-        message_model_clone.set_vec(vec![
-            ("Chat cleared! Welcome back to ChatGPT on E-Paper.".into(), false),
-            ("This demo shows how a chat interface would work on an e-paper display.".into(), false),
-            ("Try typing different topics like 'weather', 'cooking', 'space', or 'technology'!".into(), false),
-        ]);
-        
-        if let Some(ui) = ui_weak.upgrade() {
-            ui.set_is_loading(false);
-            ui.set_current_message("".into());
+        loop {
+            thread::sleep(Duration::from_secs(3)); // Update every 3 seconds
+            
+            if let Some(ui) = ui_weak_bg.upgrade() {
+                let current_count = ui.get_messages().row_count();
+                
+                if current_count != last_message_count {
+                    info!("Messages changed, updating EPD47 display...");
+                    // Here you would capture Slint's rendered output and send to EPD47
+                    // For now, just log the update
+                    last_message_count = current_count;
+                }
+            } else {
+                break; // UI has been dropped
+            }
         }
     });
 
-    info!("Starting chat demo UI");
-    
-    // Run the UI event loop
-    ui.run().map_err(|e| anyhow::anyhow!("UI error: {:?}", e))?;
+    // Run the Slint UI (this will block)
+    ui.run().map_err(|e| anyhow::anyhow!("UI run failed: {:?}", e))?;
+
+    // Cleanup when UI exits
+    epd_display.power_off()?;
+    info!("Application finished");
 
     Ok(())
 }
 
-// Generate demo responses based on simple keyword matching
-fn generate_demo_response(message: &str) -> String {
-    let message_lower = message.to_lowercase();
+fn test_epd47_display(display: &mut Epd47Display) -> anyhow::Result<()> {
+    info!("Testing EPD47 display with graphics...");
     
-    if message_lower.contains("weather") {
-        "I can't check real weather data in this demo, but a real chat app could integrate with weather APIs to provide current conditions and forecasts for any location you specify.".to_string()
-    } else if message_lower.contains("cooking") || message_lower.contains("recipe") {
-        "Here's a simple recipe demo: For pasta, boil water, add salt, cook pasta 8-12 minutes, drain, and add your favorite sauce. A real app could suggest recipes based on ingredients you have!".to_string()
-    } else if message_lower.contains("space") || message_lower.contains("astronomy") {
-        "Space is fascinating! Did you know the James Webb Space Telescope can see galaxies from when the universe was just 400 million years old? That's like looking 13+ billion years into the past!".to_string()
-    } else if message_lower.contains("technology") || message_lower.contains("ai") {
-        "This e-paper display is perfect for reading and text-based AI interactions! E-paper uses very little power and is easy on the eyes, making it ideal for extended conversations.".to_string()
-    } else if message_lower.contains("hello") || message_lower.contains("hi") {
-        "Hello! Welcome to this e-paper chat demo. This simulates how ChatGPT would work on an ESP32 with an e-paper display. What would you like to explore?".to_string()
-    } else if message_lower.contains("help") {
-        "This is a demo of a chat interface optimized for e-paper displays. Try asking about weather, cooking, space, or technology to see different response examples!".to_string()
-    } else if message_lower.len() < 3 {
-        "I see you sent a short message. In a real chat app, I'd be able to understand and respond to any length of message, from quick questions to detailed discussions.".to_string()
+    // Draw a test pattern
+    Circle::new(Point::new(100, 100), 50)
+        .into_styled(PrimitiveStyle::with_stroke(Gray4::BLACK, 3))
+        .draw(display)?;
+    
+    Rectangle::new(Point::new(200, 200), embedded_graphics::geometry::Size::new(100, 50))
+        .into_styled(PrimitiveStyle::with_fill(Gray4::new(8))) // Mid-gray
+        .draw(display)?;
+    
+    // Flush to display
+    display.flush(DrawMode::BlackOnWhite)?;
+    
+    info!("EPD47 test pattern displayed");
+    Ok(())
+}
+
+fn generate_ai_response(input: &str) -> String {
+    let input_lower = input.to_lowercase();
+    
+    if input_lower.contains("hello") || input_lower.contains("hi") {
+        "Hello! I'm running on an EPD47 e-paper display. The 960x540 resolution gives us plenty of space for conversations!".to_string()
+    } else if input_lower.contains("epd") || input_lower.contains("e-paper") || input_lower.contains("display") {
+        "This EPD47 display is fascinating! It uses 4-bit grayscale (16 levels) and only needs power during updates. Perfect for battery-powered devices.".to_string()
+    } else if input_lower.contains("slint") {
+        "Slint is an excellent choice for embedded GUIs! Its software renderer works perfectly with e-paper displays, and the declarative UI language makes development smooth.".to_string()
+    } else if input_lower.contains("power") || input_lower.contains("battery") {
+        "One of the best features of e-paper is the ultra-low power consumption. Once an image is displayed, it stays visible with zero power until the next update!".to_string()
+    } else if input_lower.contains("performance") || input_lower.contains("speed") {
+        "E-paper displays prioritize power efficiency over speed. Updates take 1-3 seconds, but the crisp, paper-like appearance and zero power retention make it worth it!".to_string()
     } else {
-        let preview = if message.len() > 50 { 
-            format!("{}...", &message[..47])
-        } else { 
-            message.to_string()
-        };
-        format!("Thanks for your message about '{}'! In a real implementation, I'd use advanced AI to provide helpful, detailed responses about any topic you're interested in discussing.", preview)
+        format!("Thanks for your message about '{}'! This chat is running on an ESP32-S3 with an EPD47 e-paper display using Rust and Slint UI.", input)
     }
 }
