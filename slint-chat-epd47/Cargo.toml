@@ -43,14 +43,12 @@ u8g2-fonts = { version = "0.4.0", features = ["embedded_graphics_textstyle"] }
 # Slint UI framework
 slint = { version = "1.10", default-features = false, features = [
     "compat-1-2",
-    "std",
     "renderer-software",
 ] }
 
 # Networking and HTTP (for future ChatGPT API integration)
 esp-idf-svc = { version = "0.51", default-features = false, features = [
     "alloc",
-    "std",
     "binstart",
 ] }
 embedded-svc = { version = "0.28", default-features = false }
@@ -59,7 +57,7 @@ esp-idf-hal = { version = "0.45", default-features = false }
 # Utilities
 log = { version = "0.4.21" }
 heapless = "0.8"
-anyhow = { version = "1.0", features = ["std"] }
+anyhow = { version = "1.0", features = [] }
 
 [build-dependencies]
 slint-build = { version = "1.10", features = ["sdf-fonts"] }
