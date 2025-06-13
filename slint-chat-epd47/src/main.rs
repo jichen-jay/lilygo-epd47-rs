@@ -1,7 +1,6 @@
 use esp_idf_svc::hal::prelude::Peripherals;
 use log::info;
 use std::rc::Rc;
-use slint::Model;
 
 // Import Slint
 slint::include_modules!();

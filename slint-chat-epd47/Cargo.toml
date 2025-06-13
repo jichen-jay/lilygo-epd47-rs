@@ -10,23 +10,31 @@ rust-version = "1.80"
 
 [profile.release]
 opt-level = "s"
+panic = "abort"
+# Disable backtrace to avoid unwinding issues
+debug = false
 
 [profile.dev]
 debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
+panic = "abort"
 
 [features]
 default = ["std", "esp-idf-svc/native"]
 std = ["alloc", "esp-idf-svc/binstart", "esp-idf-svc/std"]
 alloc = ["esp-idf-svc/alloc"]
-espidf = []                                                # Add the missing espidf feature
 
 [dependencies]
 anyhow = "1"
 log = { version = "0.4", default-features = false }
 
-# ESP-IDF - using the same pattern as the working project
-esp-idf-svc = { version = "0.51", default-features = false }
+# ESP-IDF - Fixed configuration
+esp-idf-sys = { version = "0.36.1", features = ["binstart", "native"] }
+esp-idf-svc = { version = "0.51", default-features = false, features = [
+    "std",
+    "binstart",
+    "native",
+] }
 embedded-svc = { version = "0.28", default-features = false }
 embedded-hal = { version = "1.0" }
 
@@ -34,7 +42,7 @@ embedded-hal = { version = "1.0" }
 embedded-graphics = "0.8.1"
 embedded-graphics-core = { version = "0.4.0" }
 
-# Slint UI framework - using the same features as the working project
+# Slint UI framework
 slint = { version = "1.10", default-features = false, features = [
     "compat-1-2",
     "unsafe-single-threaded",

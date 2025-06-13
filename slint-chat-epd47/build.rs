@@ -1,5 +1,4 @@
 fn main() {
-    #[cfg(feature = "espidf")]
     embuild::espidf::sysenv::output();
     
     // Compile Slint UI files with configuration optimized for e-paper
