@@ -6,62 +6,48 @@ authors = ["Chat Port Developer"]
 description = "Slint-based ChatGPT clone for LilyGO EPD47 e-paper display"
 license = "GPL-3.0"
 resolver = "2"
+rust-version = "1.80"
 
 [profile.release]
 opt-level = "s"
-codegen-units = 1
-lto = 'fat'
-debug = false
-debug-assertions = false
-incremental = false
-overflow-checks = false
 
 [profile.dev]
-debug = true
-opt-level = "s"
+debug = true    # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+default = ["std", "esp-idf-svc/native"]
+std = ["alloc", "esp-idf-svc/binstart", "esp-idf-svc/std"]
+alloc = ["esp-idf-svc/alloc"]
+espidf = []                                                # Add the missing espidf feature
 
 [dependencies]
-# Depend on the parent EPD47 driver
-lilygo-epd47 = { path = "..", features = ["embedded-graphics"] }
+anyhow = "1"
+log = { version = "0.4", default-features = false }
 
-# ESP32-S3 HAL and basic dependencies
-esp-hal = { version = "0.22.0", features = ["esp32s3", "octal-psram"] }
-esp-backtrace = { version = "0.14.2", features = [
-    "esp32s3",
-    "exception-handler",
-    "panic-handler",
-    "println",
-] }
-esp-println = { version = "0.12.0", features = ["esp32s3", "log"] }
-esp-alloc = "0.5.0"
+# ESP-IDF - using the same pattern as the working project
+esp-idf-svc = { version = "0.51", default-features = false }
+embedded-svc = { version = "0.28", default-features = false }
+embedded-hal = { version = "1.0" }
 
-# Graphics and UI
+# Graphics libraries
 embedded-graphics = "0.8.1"
 embedded-graphics-core = { version = "0.4.0" }
-u8g2-fonts = { version = "0.4.0", features = ["embedded_graphics_textstyle"] }
 
-# Slint UI framework
+# Slint UI framework - using the same features as the working project
 slint = { version = "1.10", default-features = false, features = [
     "compat-1-2",
+    "unsafe-single-threaded",
+    "libm",
     "renderer-software",
 ] }
 
-# Networking and HTTP (for future ChatGPT API integration)
-esp-idf-svc = { version = "0.51", default-features = false, features = [
-    "alloc",
-    "binstart",
+# Math support
+portable-atomic = { version = "1", features = ["float"] }
+num-traits = { version = "0.2.16", default-features = false, features = [
+    "libm",
 ] }
-embedded-svc = { version = "0.28", default-features = false }
-esp-idf-hal = { version = "0.45", default-features = false }
-
-# Utilities
-log = { version = "0.4.21" }
-heapless = "0.8"
-anyhow = { version = "1.0", features = [] }
 
 [build-dependencies]
+embuild = "0.33"
 slint-build = { version = "1.10", features = ["sdf-fonts"] }
-embuild = { version = "0.33.0", features = ["espidf"] }
-
-[features]
-default = []
